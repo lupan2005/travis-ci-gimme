@@ -185,9 +185,14 @@ _compile() {
 				fi
 			done
 			if [ -z "${bootstrap_root}" ] ; then
-				echo >&2 "error: Missing bootstrap installation"
-				echo >&2 "error: Unable to compile go from git clone"
-				return 1
+				if _try_binary "1.4" "${GIMME_HOSTARCH}" ; then
+					bootstrap_root="${GIMME_ENV_PREFIX}/go1.4.${GIMME_OS}.${GIMME_HOSTARCH}.env";
+					ln -sf "${GIMME_VERSION_PREFIX}/go1.4.${GIMME_OS}.${GIMME_HOSTARCH}" $HOME/go1.4;
+				else
+					echo >&2 "error: Unable to install go bootstrap";
+					echo >&2 "error: Missing bootstrap installation";
+					return 1;
+				fi
 			fi
 			export GOROOT_BOOTSTRAP="$(source "${bootstrap_root}" 2>/dev/null && go env GOROOT)"
 		fi
