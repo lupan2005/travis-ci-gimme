@@ -185,9 +185,14 @@ _compile() {
 				fi
 			done
 			if [ -z "${bootstrap_root}" ] ; then
-				echo >&2 "error: Missing bootstrap installation"
-				echo >&2 "error: Unable to compile go from git clone"
-				return 1
+				if _try_binary "1.4" "${GIMME_HOSTARCH}" ; then
+					bootstrap_root="${GIMME_ENV_PREFIX}/go1.4.${GIMME_OS}.${GIMME_HOSTARCH}.env";
+					ln -sf "${GIMME_VERSION_PREFIX}/go1.4.${GIMME_OS}.${GIMME_HOSTARCH}" $HOME/go1.4;
+				else
+					echo >&2 "error: Unable to install go bootstrap";
+					echo >&2 "error: Missing bootstrap installation";
+					return 1;
+				fi
 			fi
 			export GOROOT_BOOTSTRAP="$(source "${bootstrap_root}" 2>/dev/null && go env GOROOT)"
 		fi
@@ -197,6 +202,7 @@ _compile() {
 		fi
 		cd src
 		export GOOS="${GIMME_OS}" GOARCH="${GIMME_ARCH}"
+		export CC_FOR_TARGET="${GIMME_CC_FOR_TARGET}"
 		local make_log="${1}/make.${GOOS}.${GOARCH}.log"
 		./make.bash &> $make_log || return 1
 	)
@@ -365,28 +371,9 @@ _assert_version_given() {
 : ${GIMME_GO_GIT_REMOTE:=https://github.com/golang/go.git}
 : ${GIMME_TYPE:=auto} # 'auto', 'binary', 'source', or 'git'
 : ${GIMME_BINARY_OSX:=osx10.8}
+: ${GIMME_CC_FOR_TARGET:=${CC_FOR_TARGET:-""}}
 
-if [[ -n "${1}" ]] ; then
-	GIMME_GO_VERSION="${1}"
-fi
-if [[ -n "${2}" ]] ; then
-	GIMME_VERSION_PREFIX="${2}"
-fi
-
-case "${GIMME_ARCH}" in
-	x86_64) GIMME_ARCH=amd64 ;;
-	x86) GIMME_ARCH=386 ;;
-	arm64) ;;
-	arm*) GIMME_ARCH=arm ;;
-esac
-
-case "${GIMME_HOSTARCH}" in
-	x86_64) GIMME_HOSTARCH=amd64 ;;
-	x86) GIMME_HOSTARCH=386 ;;
-	arm64) ;;
-	arm*) GIMME_HOSTARCH=arm ;;
-esac
-
+force_flag=""
 case "${1}" in
 	-h|--help|help|wat)
 		_old_ifs="$IFS"
@@ -410,16 +397,47 @@ case "${1}" in
 		exit 0
 	;;
 	-f|--force|force)
-		GIMME_GO_VERSION="${2}"
-		if [[ -n "${3}" ]] ; then
-			GIMME_VERSION_PREFIX="${3}"
-		fi
-		_assert_version_given "$@"
-		_wipe_version "${GIMME_GO_VERSION}"
+		force_flag="force"
+		shift
 	;;
 esac
 
+if [[ -n "${1}" ]] ; then
+	GIMME_GO_VERSION="${1}"
+fi
+
+if [[ -n "${2}" ]] ; then
+	GIMME_VERSION_PREFIX="${2}"
+fi
+
 _assert_version_given "$@"
+
+if [[ "${force_flag}" == "force" ]] ; then
+	_wipe_version "${GIMME_GO_VERSION}"
+fi
+
+case "${GIMME_ARCH}" in
+	x86_64) GIMME_ARCH=amd64 ;;
+	x86) GIMME_ARCH=386 ;;
+	arm64)
+		if [[ "${GIMME_GO_VERSION}" < "1.5.3" ]]; then
+			echo >&2 "error: arm64 is not supported by this go version"
+			echo >&2 "try go1.5.3 and newer version"
+			exit 1
+		fi
+		if [[ "${CGO_ENABLED}" == "1" && "${GIMME_OS}" == "linux" && "${GIMME_CC_FOR_TARGET}" == ""  ]]; then
+			GIMME_CC_FOR_TARGET="aarch64-linux-gnu-gcc"
+		fi
+		;;
+	arm*) GIMME_ARCH=arm ;;
+esac
+
+case "${GIMME_HOSTARCH}" in
+	x86_64) GIMME_HOSTARCH=amd64 ;;
+	x86) GIMME_HOSTARCH=386 ;;
+	arm64) ;;
+	arm*) GIMME_HOSTARCH=arm ;;
+esac
 
 unset GOARCH
 unset GOBIN
