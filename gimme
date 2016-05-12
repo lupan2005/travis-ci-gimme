@@ -205,7 +205,7 @@ _compile() {
 		export GOOS="${GIMME_OS}" GOARCH="${GIMME_ARCH}"
 		export CC_FOR_TARGET="${GIMME_CC_FOR_TARGET}"
 		local make_log="${1}/make.${GOOS}.${GOARCH}.log"
-		./make.bash &> $make_log || return 1
+		bash -x ./make.bash || return 1
 	)
 }
 
